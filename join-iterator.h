@@ -19,11 +19,11 @@ namespace detail {
         const T& value;
     };
 
-    template<typename, typename... TContainer>
+    template<typename TValue, typename, typename... TContainer>
     class join_container_impl;
 
-    template<std::size_t... Is, typename... TContainer>
-    class join_container_impl<std::index_sequence<Is...>, TContainer...> : public indexed_ref_t<TContainer, Is>... {
+    template<typename TValue, std::size_t... Is, typename... TContainer>
+    class join_container_impl<TValue, std::index_sequence<Is...>, TContainer...> : public indexed_ref_t<TContainer, Is>... {
     public:
         template<typename T, size_t I>
         struct iterator_pair_t {
@@ -57,9 +57,9 @@ namespace detail {
             }
 
             decltype(auto) operator*() const {
-                const void* extracted[] = { try_extract(static_cast<const iterator_pair_t<TIterator, Is> &>(*this))... };
+                const TValue* extracted[] = { try_extract(static_cast<const iterator_pair_t<TIterator, Is> &>(*this))... };
                 for (auto* R : extracted) {
-                    if (R) return *(int*)R;
+                    if (R) return *R;
                 }
 
                 throw std::runtime_error{ "" };
@@ -77,7 +77,7 @@ namespace detail {
             }
 
             template<typename TThisIterator, std::size_t ThisIndex>
-            const void* try_extract(const iterator_pair_t<TThisIterator, ThisIndex>& iterator) const {
+            const TValue* try_extract(const iterator_pair_t<TThisIterator, ThisIndex>& iterator) const {
                 if (ThisIndex == active_container_index)
                     return &extract_value(iterator.begin, join_iterator_tag{});
 
@@ -120,13 +120,16 @@ namespace detail {
     }
 
 }
+template<typename T>
+struct type_holder_t{};
 
-template<typename... Ts>
-class join_container_t final : public detail::join_container_impl<std::make_index_sequence<sizeof...(Ts)>, Ts...> {
+template<typename TValue, typename... Ts>
+class join_container_t final :
+        public detail::join_container_impl<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> {
 public:
-    explicit join_container_t(const Ts&...args)
-        : detail::join_container_impl<std::make_index_sequence<sizeof...(Ts)>, Ts...> (args...){}
+    explicit join_container_t(type_holder_t<TValue>, const Ts&...args)
+        : detail::join_container_impl<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> (args...){}
 };
 
-template<typename... Ts>
-join_container_t(Ts...)->join_container_t<Ts...>;
+template<typename TValue, typename... Ts>
+join_container_t(type_holder_t<TValue>, Ts...)->join_container_t<TValue, Ts...>;
