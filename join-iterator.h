@@ -5,8 +5,10 @@
 #pragma once
 
 #include <type_traits>
-#include <tuple>
+#include <utility>
 #include <stdexcept>
+#include <functional>
+#include <array>
 
 namespace detail {
 
@@ -42,10 +44,29 @@ namespace detail {
         class join_iterator_t<std::index_sequence<Is...>, TIterator...> : public iterator_pair_t<TIterator, Is>... {
         public:
             explicit join_iterator_t(const std::pair<TIterator, TIterator>&... in_pair)
-                    : iterator_pair_t<TIterator, Is>(in_pair)...{}
+                    : iterator_pair_t<TIterator, Is>(in_pair)...
+            {
+                increment = {[this] (bool first_iteration) {
+                    auto&& cur_pair = static_cast<iterator_pair_t<TIterator, Is>&>(*this);
+                    if (cur_pair.begin == cur_pair.end) return true;
+                    if (first_iteration)
+                        ++cur_pair.begin;
+                    return cur_pair.begin == cur_pair.end;
+
+                }...};
+
+                extract = { [this] {
+                    auto&& cur_pair = static_cast<iterator_pair_t<TIterator, Is>&>(*this);
+                    if (cur_pair.begin == cur_pair.end) return (TValue*)nullptr;
+                    auto&& value = *cur_pair.begin;
+                    return (TValue*)&value;
+                }... };
+            }
 
             join_iterator_t& operator++() {
-                (try_increment(static_cast<iterator_pair_t<TIterator, Is> &>(*this)), ...);
+                const auto cashed_index = active_container_index;
+                while (active_container_index < increment.size() && increment[active_container_index](cashed_index == active_container_index))
+                    ++active_container_index;
                 return *this;
             }
 
@@ -57,10 +78,8 @@ namespace detail {
             }
 
             decltype(auto) operator*() const {
-                const TValue* extracted[] = { try_extract(static_cast<const iterator_pair_t<TIterator, Is> &>(*this))... };
-                for (auto* R : extracted) {
-                    if (R) return *R;
-                }
+                if (auto* value = extract[active_container_index]())
+                    return *value;
 
                 throw std::runtime_error{ "" };
             }
@@ -68,12 +87,13 @@ namespace detail {
             uint32_t active_container_index{ 0 };
         private:
             template<typename TThisIterator, std::size_t ThisIndex>
-            void try_increment(iterator_pair_t<TThisIterator, ThisIndex>& iterator) {
+            bool try_increment(iterator_pair_t<TThisIterator, ThisIndex>& iterator) {
+                const auto cur_index = active_container_index;
                 if (active_container_index == ThisIndex) {
-                    ++iterator.begin;
                     if (iterator.begin == iterator.end)
                         ++active_container_index;
                 }
+                return cur_index == active_container_index;
             }
 
             template<typename TThisIterator, std::size_t ThisIndex>
@@ -85,9 +105,12 @@ namespace detail {
             }
 
             template<typename TThis>
-            bool is_same(const TThis& lhs, const TThis& rhs) const {
+            static bool is_same(const TThis& lhs, const TThis& rhs) {
                 return lhs.begin == rhs.begin && lhs.end == rhs.end;
             }
+
+            std::array<std::function<bool(bool)>, sizeof...(TIterator)> increment;
+            std::array<std::function<TValue*()>, sizeof...(TIterator)> extract;
         };
 
         template<typename... Ts>
