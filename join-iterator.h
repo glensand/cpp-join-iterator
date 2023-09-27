@@ -52,7 +52,6 @@ namespace detail {
                     if (first_iteration)
                         ++cur_pair.begin;
                     return cur_pair.begin == cur_pair.end;
-
                 }...};
 
                 extract = { [this] {
@@ -86,24 +85,6 @@ namespace detail {
 
             uint32_t active_container_index{ 0 };
         private:
-            template<typename TThisIterator, std::size_t ThisIndex>
-            bool try_increment(iterator_pair_t<TThisIterator, ThisIndex>& iterator) {
-                const auto cur_index = active_container_index;
-                if (active_container_index == ThisIndex) {
-                    if (iterator.begin == iterator.end)
-                        ++active_container_index;
-                }
-                return cur_index == active_container_index;
-            }
-
-            template<typename TThisIterator, std::size_t ThisIndex>
-            const TValue* try_extract(const iterator_pair_t<TThisIterator, ThisIndex>& iterator) const {
-                if (ThisIndex == active_container_index)
-                    return &extract_value(iterator.begin, join_iterator_tag{});
-
-                return nullptr;
-            }
-
             template<typename TThis>
             static bool is_same(const TThis& lhs, const TThis& rhs) {
                 return lhs.begin == rhs.begin && lhs.end == rhs.end;
