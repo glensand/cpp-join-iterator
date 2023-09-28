@@ -22,10 +22,10 @@ namespace detail {
     };
 
     template<typename TValue, typename, typename... TContainer>
-    class join_container_impl;
+    class transform_join_container_view_t;
 
     template<typename TValue, std::size_t... Is, typename... TContainer>
-    class join_container_impl<TValue, std::index_sequence<Is...>, TContainer...> : public indexed_ref_t<TContainer, Is>... {
+    class transform_join_container_view_t<TValue, std::index_sequence<Is...>, TContainer...> : public indexed_ref_t<TContainer, Is>... {
     public:
         template<typename T, size_t I>
         struct iterator_pair_t {
@@ -38,12 +38,12 @@ namespace detail {
         };
 
         template<typename... TIterator>
-        class join_iterator_t;
+        class transform_join_iterator_t;
 
         template<typename... TIterator>
-        class join_iterator_t<std::index_sequence<Is...>, TIterator...> : public iterator_pair_t<TIterator, Is>... {
+        class transform_join_iterator_t<std::index_sequence<Is...>, TIterator...> : public iterator_pair_t<TIterator, Is>... {
         public:
-            explicit join_iterator_t(const std::pair<TIterator, TIterator>&... in_pair)
+            explicit transform_join_iterator_t(const std::pair<TIterator, TIterator>&... in_pair)
                     : iterator_pair_t<TIterator, Is>(in_pair)...
             {
                 increment = {[this] (bool first_iteration) {
@@ -57,19 +57,18 @@ namespace detail {
                 extract = { [this] {
                     auto&& cur_pair = static_cast<iterator_pair_t<TIterator, Is>&>(*this);
                     if (cur_pair.begin == cur_pair.end) return (TValue*)nullptr;
-                    auto&& value = *cur_pair.begin;
-                    return (TValue*)&value;
+                    return (TValue*)extract_value(cur_pair.begin, detail::join_iterator_tag{});
                 }... };
             }
 
-            join_iterator_t& operator++() {
+            transform_join_iterator_t& operator++() {
                 const auto cashed_index = active_container_index;
                 while (active_container_index < increment.size() && increment[active_container_index](cashed_index == active_container_index))
                     ++active_container_index;
                 return *this;
             }
 
-            bool operator!=(const join_iterator_t& Rhs) const {
+            bool operator!=(const transform_join_iterator_t& Rhs) const {
                 return active_container_index != Rhs.active_container_index ||
                        (... || !is_same(static_cast<const iterator_pair_t<TIterator, Is> &>(*this),
                                         static_cast<const iterator_pair_t<TIterator, Is> &>(Rhs))
@@ -95,21 +94,21 @@ namespace detail {
         };
 
         template<typename... Ts>
-        join_iterator_t(std::pair<Ts, Ts>...) ->
-        join_iterator_t<std::make_index_sequence<sizeof...(Ts)>, std::decay_t<Ts>...>;
+        transform_join_iterator_t(std::pair<Ts, Ts>...) ->
+        transform_join_iterator_t<std::make_index_sequence<sizeof...(Ts)>, std::decay_t<Ts>...>;
 
-        explicit join_container_impl(const TContainer&... Containers)
+        explicit transform_join_container_view_t(const TContainer&... Containers)
                 : indexed_ref_t<TContainer, Is>(Containers)...{}
 
         auto begin() const {
-            return join_iterator_t(std::pair{
+            return transform_join_iterator_t(std::pair{
                 static_cast<const indexed_ref_t<TContainer, Is>&>(*this).value.begin(),
                 static_cast<const indexed_ref_t<TContainer, Is>&>(*this).value.end()
             }...);
         }
 
         auto end() const {
-            auto end_it = join_iterator_t(std::pair{
+            auto end_it = transform_join_iterator_t(std::pair{
                 static_cast<const indexed_ref_t<TContainer, Is>&>(*this).value.end(),
                 static_cast<const indexed_ref_t<TContainer, Is>&>(*this).value.end()
             }...);
@@ -120,7 +119,7 @@ namespace detail {
 
     template<typename TIterator>
     decltype(auto) extract_value(TIterator&& iterator, detail::join_iterator_tag) {
-        return *iterator;
+        return &(*iterator);
     }
 
 }
@@ -128,12 +127,12 @@ template<typename T>
 struct type_holder_t{};
 
 template<typename TValue, typename... Ts>
-class join_container_t final :
-        public detail::join_container_impl<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> {
+class transform_join_container_t final :
+        public detail::transform_join_container_view_t<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> {
 public:
-    explicit join_container_t(type_holder_t<TValue>, const Ts&...args)
-        : detail::join_container_impl<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> (args...){}
+    explicit transform_join_container_t(type_holder_t<TValue>, const Ts&...args)
+        : detail::transform_join_container_view_t<TValue, std::make_index_sequence<sizeof...(Ts)>, Ts...> (args...){}
 };
 
 template<typename TValue, typename... Ts>
-join_container_t(type_holder_t<TValue>, Ts...)->join_container_t<TValue, Ts...>;
+transform_join_container_t(type_holder_t<TValue>, Ts...)->transform_join_container_t<TValue, Ts...>;

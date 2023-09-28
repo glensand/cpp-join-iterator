@@ -2,15 +2,13 @@
  * Copyright (C) 2023 Gleb Bezborodov - All Rights Reserved
  */
 
-#include "join-iterator.h"
 #include <map>
 #include <vector>
 #include <iostream>
+#include "join-iterator.h"
 
-namespace detail{
-    const int& extract_value(const std::map<int, float>::const_iterator& iterator, detail::join_iterator_tag) {
-        return iterator->first;
-    }
+const int* extract_value(const std::map<int, float>::const_iterator& iterator, detail::join_iterator_tag) {
+    return &iterator->first;
 }
 
 int main() {
@@ -23,7 +21,7 @@ int main() {
     m.emplace(15, 34);
     m.emplace(230, 34);
     m.emplace(61, 34);
-    join_container_t join_c(type_holder_t<int>{}, i, m);
+    transform_join_container_t join_c(type_holder_t<int>{}, i, m);
     for (auto&& v : join_c) {
         std::cout << v << std::endl;
     }
